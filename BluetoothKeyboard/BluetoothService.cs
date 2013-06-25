@@ -336,8 +336,7 @@ namespace BluetoothKeyboard
 					}
 					
 					// If a connection was accepted
-					if (socket != null) 
-					{
+					if (socket != null) {
 						lock (this) {
 							switch (_state) {
 							case STATE_LISTEN:
@@ -400,9 +399,7 @@ namespace BluetoothKeyboard
 				// Get a BluetoothSocket for a connection with the
 				// given BluetoothDevice
 				try {
-
-					var methodInfo = device.GetType().GetMethod("CreateRfcommSocketToServiceRecord");//, new Class[] {int.class});
-					tmp = (BluetoothSocket) methodInfo.Invoke(device, new object[]{MY_UUID});
+					tmp = device.CreateRfcommSocketToServiceRecord (MY_UUID);
 				} catch (Java.IO.IOException e) {
 					Log.Error (TAG, "create() failed", e);
 				}
