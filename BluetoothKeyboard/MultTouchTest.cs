@@ -24,9 +24,11 @@ namespace BluetoothKeyboard
 		// Key names received from the BluetoothChatService Handler
 		public const string DEVICE_NAME = "device_name";
 		public const string TOAST = "toast";
+		// Layout Views
+		protected TextView title;
 
 		private BluetoothAdapter m_bluetoothAdaptor = null;
-		private BluetoothService m_bluetoothService = null;
+		private BluetoothChatService m_bluetoothService = null;
 		// Name of the connected device
 		public string m_connectedDeviceName = null;
 		// Array adapter for the conversation thread
@@ -83,99 +85,16 @@ namespace BluetoothKeyboard
 
 		}
 
-		protected override void OnStart()
-		{
-			base.OnStart ();
-
-			//If BT now on, request enabling
-			if (!m_bluetoothAdaptor.IsEnabled) {
-				var enableIntent = new Intent (BluetoothAdapter.ActionRequestEnable);
-				StartActivityForResult (enableIntent, REQUEST_ENABLE_BT);
-			}
-			else{
-				m_bluetoothService = new BluetoothService (this, new MyHandler (this));
-			}
-
-		}
-
-		protected override void OnResume()
-		{
-			base.OnResume ();
-
-			//Oerform this check in onResume() cover the case in which BT was not enabled during OnStart(), so we
-			//were paused to enable it. OnResume() will be called when ACTION_REQUESR_ENABLE activitity returns
-			if (m_bluetoothService != null) {
-				//Only if the state is STATE_NOW
-				if (m_bluetoothService.GetState () == BluetoothKeyboard.CONNECTION_STATE.STATE_NONE) {
-					m_bluetoothService.Start ();
-				}
-			}
-		}
-
-		public override bool OnCreateOptionsMenu(IMenu item)
-		{
-			var inflater = MenuInflater;
-			inflater.Inflate(Resource.Menu.option_menu, item);
-			return true;
-		}
-
-		public override bool OnOptionsItemSelected(IMenuItem item)
-		{
-			switch (item.ItemId) {
-				case Resource.Id.scan:
-					var serverIntent = new Intent(this, typeof(DeviceListActivity));
-					StartActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);
-					return true;
-				case Resource.Id.discoverable:
-					// Ensure this device is discoverable by others
-					EnsureDiscoverable();
-					return true;
-			}
-
-			return false;
-		}
-
-		protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
-		{
-			Log.Debug (TAG, "onActivityResult " + resultCode);
-
-			switch(requestCode)
-			{
-				case REQUEST_CONNECT_DEVICE:
-					// When DeviceListActivity returns with a device to connect
-					if( resultCode == Result.Ok)
-					{
-						// Get the device MAC address
-						var address = data.Extras.GetString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
-						// Get the BLuetoothDevice object
-						BluetoothDevice device = m_bluetoothAdaptor.GetRemoteDevice (address);
-						// Attempt to connect to the device
-						m_bluetoothService.Connect(device);
-					}
-					break;
-				case REQUEST_ENABLE_BT:
-					// When the request to enable Bluetooth returns
-					if(resultCode == Result.Ok)
-					{
-						// Bluetooth is now enabled, so set up a chat session
-						m_bluetoothService = new BluetoothService (this, new MyHandler (this));
-					}
-					else
-					{
-						// User did not enable Bluetooth or an error occured
-						Log.Debug(TAG, "BT not enabled");
-						Toast.MakeText(this, Resource.String.bt_not_enabled_leaving, ToastLength.Short).Show();
-						Finish();
-					}
-					break;
-			}
-		}
-
 		protected override void OnCreate(Bundle savedInstanceState) 
 		{
-			RequestWindowFeature (WindowFeatures.NoTitle);
-			Window.AddFlags(WindowManagerFlags.Fullscreen);
-			Window.ClearFlags (WindowManagerFlags.ForceNotFullscreen);
+			RequestWindowFeature (WindowFeatures.CustomTitle);
+			SetContentView (Resource.Layout.Main);
+			Window.SetFeatureInt (WindowFeatures.CustomTitle, Resource.Layout.custom_title);
+
+			// Set up the custom title
+			title = FindViewById<TextView> (Resource.Id.title_left_text);
+			title.SetText (Resource.String.app_name);
+			title = FindViewById<TextView> (Resource.Id.title_right_text);
 
 			EventHandler letterAction = delegate(object sender, EventArgs e)
 			{
@@ -185,7 +104,8 @@ namespace BluetoothKeyboard
 				}
 				else
 				{
-					m_bluetoothService.Write(System.Text.Encoding.Unicode.GetBytes(((Button)sender).Text));
+					var message = new Java.Lang.String (((Button)sender).Text);
+					SendMessage (message);
 				}
 			};
 
@@ -200,7 +120,6 @@ namespace BluetoothKeyboard
 			}
 
 			base.OnCreate (savedInstanceState);
-
 			this.SetContentView (Resource.Layout.Main);
 
 			btn1 = (Button) FindViewById(Resource.Id.button1);
@@ -280,7 +199,7 @@ namespace BluetoothKeyboard
 			btn19.SetOnTouchListener(this);
 			btn19.Text = "L";
 			btn19.Click += letterAction;
-		
+
 			btn20 = (Button) FindViewById(Resource.Id.button20);
 			btn20.SetOnTouchListener(this);
 			btn20.Text = "Z";
@@ -309,16 +228,68 @@ namespace BluetoothKeyboard
 			btn26.SetOnTouchListener(this);
 			btn26.Text = "M";
 			btn26.Click += letterAction;
-		
+
 			spaceBar = (Button) FindViewById(Resource.Id.spacebar);
 			spaceBar.SetOnTouchListener(this);
 			spaceBar.Text = " ";
 			spaceBar.Click += letterAction;
 
 			this.OnFourFingerDrag += fourFinger;
-	
+
 		}
 
+		protected override void OnStart()
+		{
+			base.OnStart ();
+
+			//If BT now on, request enabling
+			if (!m_bluetoothAdaptor.IsEnabled) {
+				var enableIntent = new Intent (BluetoothAdapter.ActionRequestEnable);
+				StartActivityForResult (enableIntent, REQUEST_ENABLE_BT);
+			}
+			else{
+				m_bluetoothService = new BluetoothChatService (this, new MyHandler (this));
+			}
+
+		}
+
+		protected override void OnResume()
+		{
+			base.OnResume ();
+
+			//Oerform this check in onResume() cover the case in which BT was not enabled during OnStart(), so we
+			//were paused to enable it. OnResume() will be called when ACTION_REQUESR_ENABLE activitity returns
+			if (m_bluetoothService != null) {
+				//Only if the state is STATE_NOW
+				if (m_bluetoothService.GetState () == BluetoothChatService.STATE_NONE) {
+					m_bluetoothService.Start ();
+				}
+			}
+		}
+
+		public override bool OnCreateOptionsMenu(IMenu item)
+		{
+			var inflater = MenuInflater;
+			inflater.Inflate(Resource.Menu.option_menu, item);
+			return true;
+		}
+
+		public override bool OnOptionsItemSelected(IMenuItem item)
+		{
+			switch (item.ItemId) {
+				case Resource.Id.scan:
+					var serverIntent = new Intent(this, typeof(DeviceListActivity));
+					StartActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);
+					return true;
+				case Resource.Id.discoverable:
+					// Ensure this device is discoverable by others
+					EnsureDiscoverable();
+					return true;
+			}
+
+			return false;
+		}
+	
 		private void EnsureDiscoverable ()
 		{
 			Log.Debug (TAG, "ensure discoverable");
@@ -345,7 +316,7 @@ namespace BluetoothKeyboard
 		private void SendMessage (Java.Lang.String message)
 		{
 			// Check that we're actually connected before trying anything
-			if (m_bluetoothService.GetState () != BluetoothKeyboard.CONNECTION_STATE.STATE_CONNECTED) 
+			if (m_bluetoothService.GetState () != BluetoothChatService.STATE_CONNECTED) 
 			{
 				Toast.MakeText (this, Resource.String.not_connected, ToastLength.Short).Show ();
 				return;
@@ -358,6 +329,42 @@ namespace BluetoothKeyboard
 			    m_bluetoothService.Write (send);
 
 				// Reset out string buffer to zero and clear the edit text field
+			}
+		}
+
+		protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
+		{
+			Log.Debug (TAG, "onActivityResult " + resultCode);
+
+			switch(requestCode)
+			{
+				case REQUEST_CONNECT_DEVICE:
+				// When DeviceListActivity returns with a device to connect
+				if( resultCode == Result.Ok)
+				{
+					// Get the device MAC address
+					var address = data.Extras.GetString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
+					// Get the BLuetoothDevice object
+					BluetoothDevice device = m_bluetoothAdaptor.GetRemoteDevice (address);
+					// Attempt to connect to the device
+					m_bluetoothService.Connect(device);
+				}
+				break;
+				case REQUEST_ENABLE_BT:
+				// When the request to enable Bluetooth returns
+				if(resultCode == Result.Ok)
+				{
+					// Bluetooth is now enabled, so set up a chat session
+					m_bluetoothService = new BluetoothChatService (this, new MyHandler (this));
+				}
+				else
+				{
+					// User did not enable Bluetooth or an error occured
+					Log.Debug(TAG, "BT not enabled");
+					Toast.MakeText(this, Resource.String.bt_not_enabled_leaving, ToastLength.Short).Show();
+					Finish();
+				}
+				break;
 			}
 		}
 
@@ -381,16 +388,16 @@ namespace BluetoothKeyboard
 
 						switch (msg.Arg1) 
 						{
-							case (int)BluetoothKeyboard.CONNECTION_STATE.STATE_CONNECTED:
+							case (int)BluetoothChatService.STATE_CONNECTED:
 								m_bluetoothKeyboard.AddDebugToEditBox("Bluetooth Connected\n");
 								//m_bluetoothKeyboard.title.SetText (Resource.String.title_connected_to);
 								//m_bluetoothKeyboard.title.Append (bluetoothChat.connectedDeviceName);
 								break;
-							case (int)BluetoothKeyboard.CONNECTION_STATE.STATE_CONNECTING:
+								case (int)BluetoothChatService.STATE_CONNECTING:
 								//m_bluetoothKeyboard.title.SetText (Resource.String.title_connecting);
 								break;
-							case (int)BluetoothKeyboard.CONNECTION_STATE.STATE_LISTEN:
-							case (int)BluetoothKeyboard.CONNECTION_STATE.STATE_NONE:
+								case (int)BluetoothChatService.STATE_LISTEN:
+								case (int)BluetoothChatService.STATE_NONE:
 								//m_bluetoothKeyboard.title.SetText (Resource.String.title_not_connected);
 								break;
 						}
@@ -401,10 +408,10 @@ namespace BluetoothKeyboard
 						var writeMessage = new Java.Lang.String (writeBuf);
 						//bluetoothChat.conversationArrayAdapter.Add ("Me: " + writeMessage);
 						break;
-					case MESSAGE_READ:
-						byte[] readBuf = (byte[])msg.Obj;
+				case MESSAGE_READ:
+					byte[] readBuf = (byte[])msg.Obj;
 							// construct a string from the valid bytes in the buffer
-						var readMessage = new Java.Lang.String (readBuf, 0, msg.Arg1);
+					var readMessage = new Java.Lang.String (readBuf, 0, msg.Arg1);
 						m_bluetoothKeyboard.AddDebugToEditBox (readMessage.ToString());
 						//bluetoothChat.conversationArrayAdapter.Add (bluetoothChat.connectedDeviceName + ":  " + readMessage);
 					break;

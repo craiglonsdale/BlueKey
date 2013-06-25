@@ -36,9 +36,9 @@ namespace BluetoothKeyboard
 		{
 			base.OnCreate(instance);
 
-			RequestWindowFeature(WindowFeatures.NoTitle);
-			Window.AddFlags(WindowManagerFlags.Fullscreen);
-			Window.ClearFlags(WindowManagerFlags.ForceNotFullscreen);
+		//	RequestWindowFeature(WindowFeatures.NoTitle);
+		//	Window.AddFlags(WindowManagerFlags.Fullscreen);
+		//	Window.ClearFlags(WindowManagerFlags.ForceNotFullscreen);
 			m_parentView = FindViewById (global::Android.Resource.Id.Content).RootView;
 			m_parentView.SetOnTouchListener(this);
 			m_touchSlop = ViewConfiguration.Get(ApplicationContext).ScaledTouchSlop;
