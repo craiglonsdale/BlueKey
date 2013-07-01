@@ -25,6 +25,32 @@ using System.Threading;
 
 namespace BluetoothKeyboard
 {
+	// Message types sent from the BluetoothChatService Handler
+	enum MessageType
+	{
+		MESSAGE_STATE_CHANGE = 1,
+		MESSAGE_READ = 2,
+		MESSAGE_WRITE = 3,
+		MESSAGE_DEVICE_NAME = 4,
+		MESSAGE_TOAST = 5
+	}
+
+	// Intent request codes
+	enum IntentRequestCodes
+	{
+		REQUEST_CONNECT_DEVICE = 1,
+		REQUEST_ENABLE_BT = 2
+	}
+
+	// Constants that indicate the current connection state
+	enum ConnectionState
+	{
+		STATE_NONE = 0,       // we're doing nothing
+		STATE_LISTEN = 1,     // now listening for incoming connections
+		STATE_CONNECTING = 2, // now initiating an outgoing connection
+		STATE_CONNECTED = 3   // now connected to a remote device
+	}
+
 	/// <summary>
 	/// This class does all the work for setting up and managing Bluetooth
 	/// connections with other devices. It has a thread that listens for
@@ -50,15 +76,8 @@ namespace BluetoothKeyboard
 		private AcceptThread acceptThread;
 		protected ConnectThread connectThread;
 		private ConnectedThread connectedThread;
-		protected static int _state;
+		protected static ConnectionState _state;
 	
-		// Constants that indicate the current connection state
-		// TODO: Convert to Enums
-		public const int STATE_NONE = 0;       // we're doing nothing
-		public const int STATE_LISTEN = 1;     // now listening for incoming connections
-		public const int STATE_CONNECTING = 2; // now initiating an outgoing connection
-		public const int STATE_CONNECTED = 3;  // now connected to a remote device
-		
 		/// <summary>
 		/// Constructor. Prepares a new BluetoothChat session.
 		/// </summary>
@@ -71,7 +90,7 @@ namespace BluetoothKeyboard
 		public BluetoothChatService (Context context, Handler handler)
 		{
 			_adapter = BluetoothAdapter.DefaultAdapter;
-			_state = STATE_NONE;
+			_state = ConnectionState.STATE_NONE;
 			_handler = handler;
 		}
 		
@@ -79,10 +98,10 @@ namespace BluetoothKeyboard
 		/// Set the current state of the chat connection.
 		/// </summary>
 		/// <param name='state'>
-		/// An integer defining the current connection state.
+		/// A ConnectionState defining the current connection state.
 		/// </param>
 		[MethodImpl(MethodImplOptions.Synchronized)]
-		private void SetState (int state)
+		private void SetState (ConnectionState state)
 		{
 			if (Debug)
 				Log.Debug (TAG, "setState() " + _state + " -> " + state);
@@ -90,14 +109,14 @@ namespace BluetoothKeyboard
 			_state = state;
 	
 			// Give the new state to the Handler so the UI Activity can update
-			_handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_STATE_CHANGE, state, -1).SendToTarget ();
+			_handler.ObtainMessage ((int)MessageType.MESSAGE_STATE_CHANGE, (int)state, -1).SendToTarget ();
 		}
 		
 		/// <summary>
 		/// Return the current connection state.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.Synchronized)]
-		public int GetState ()
+		public ConnectionState GetState ()
 		{
 			return _state;
 		}
@@ -128,7 +147,7 @@ namespace BluetoothKeyboard
 				acceptThread.Start ();
 			}
 			
-			SetState (STATE_LISTEN);
+			SetState (ConnectionState.STATE_LISTEN);
 		}
 		
 		/// <summary>
@@ -144,7 +163,7 @@ namespace BluetoothKeyboard
 				Log.Debug (TAG, "connect to: " + device);
 	
 			// Cancel any thread attempting to make a connection
-			if (_state == STATE_CONNECTING) {
+			if (_state == ConnectionState.STATE_CONNECTING) {
 				if (connectThread != null) {
 					connectThread.Cancel ();
 					connectThread = null;
@@ -161,7 +180,7 @@ namespace BluetoothKeyboard
 			connectThread = new ConnectThread (device, this);
 			connectThread.Start ();
 			
-			SetState (STATE_CONNECTING);
+			SetState (ConnectionState.STATE_CONNECTING);
 		}
 		
 		/// <summary>
@@ -202,13 +221,13 @@ namespace BluetoothKeyboard
 			connectedThread.Start ();
 	
 			// Send the name of the connected device back to the UI Activity
-			var msg = _handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_DEVICE_NAME);
+			var msg = _handler.ObtainMessage ((int)MessageType.MESSAGE_DEVICE_NAME);
 			Bundle bundle = new Bundle ();
 			bundle.PutString (BluetoothKeyboardActivity.DEVICE_NAME, device.Name);
 			msg.Data = bundle;
 			_handler.SendMessage (msg);
 	
-			SetState (STATE_CONNECTED);
+			SetState (ConnectionState.STATE_CONNECTED);
 		}
 		
 		/// <summary>
@@ -235,7 +254,7 @@ namespace BluetoothKeyboard
 				acceptThread = null;
 			}
 			
-			SetState (STATE_NONE);
+			SetState (ConnectionState.STATE_NONE);
 		}
 		
 		/// <summary>
@@ -250,7 +269,7 @@ namespace BluetoothKeyboard
 			ConnectedThread r;
 			// Synchronize a copy of the ConnectedThread
 			lock (this) {
-				if (_state != STATE_CONNECTED)
+				if (_state != ConnectionState.STATE_CONNECTED)
 					return;
 				r = connectedThread;
 			}
@@ -263,10 +282,10 @@ namespace BluetoothKeyboard
 		/// </summary>
 		private void ConnectionFailed ()
 		{
-			SetState (STATE_LISTEN);
+			SetState (ConnectionState.STATE_LISTEN);
 			
 			// Send a failure message back to the Activity
-			var msg = _handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_TOAST);
+			var msg = _handler.ObtainMessage ((int)MessageType.MESSAGE_TOAST);
 			Bundle bundle = new Bundle ();
 			bundle.PutString (BluetoothKeyboardActivity.TOAST, "Unable to connect device");
 			msg.Data = bundle;
@@ -278,10 +297,10 @@ namespace BluetoothKeyboard
 		/// </summary>
 		public void ConnectionLost ()
 		{
-			SetState (STATE_LISTEN);
+			SetState (ConnectionState.STATE_LISTEN);
 			
 			// Send a failure message back to the Activity
-			var msg = _handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_TOAST);
+			var msg = _handler.ObtainMessage ((int)MessageType.MESSAGE_TOAST);
 			Bundle bundle = new Bundle ();
 			bundle.PutString (BluetoothKeyboardActivity.TOAST, "Device connection was lost");
 			msg.Data = bundle;
@@ -308,7 +327,6 @@ namespace BluetoothKeyboard
 				// Create a new listening server socket
 				try {
 					tmp = _adapter.ListenUsingRfcommWithServiceRecord (NAME, MY_UUID);
-	
 				} catch (Java.IO.IOException e) {
 					Log.Error (TAG, "listen() failed", e);
 				}
@@ -325,7 +343,7 @@ namespace BluetoothKeyboard
 					BluetoothSocket socket = null;
 	
 					// Listen to the server socket if we're not connected
-					while (_state != STATE_CONNECTED) {
+					while (_state != ConnectionState.STATE_CONNECTED) {
 					try {
 						// This is a blocking call and will only return on a
 						// successful connection or an exception
@@ -339,13 +357,13 @@ namespace BluetoothKeyboard
 					if (socket != null) {
 						lock (this) {
 							switch (_state) {
-							case STATE_LISTEN:
-							case STATE_CONNECTING:
+							case ConnectionState.STATE_LISTEN:
+							case ConnectionState.STATE_CONNECTING:
 								// Situation normal. Start the connected thread.
 								_service.Connected (socket, socket.RemoteDevice);
 								break;
-							case STATE_NONE:
-							case STATE_CONNECTED:
+							case ConnectionState.STATE_NONE:
+							case ConnectionState.STATE_CONNECTED:
 								// Either not ready or already connected. Terminate new socket.
 								try {
 									socket.Close ();
@@ -501,7 +519,7 @@ namespace BluetoothKeyboard
 							bytes = mmInStream.Read (buffer, 0, buffer.Length);
 					
 							// Send the obtained bytes to the UI Activity
-							_handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_READ, bytes, -1, buffer)
+							_handler.ObtainMessage ((int)MessageType.MESSAGE_READ, bytes, -1, buffer)
 								.SendToTarget ();
 						} catch (Java.IO.IOException e) {
 							Log.Error (TAG, "disconnected", e);
@@ -526,7 +544,7 @@ namespace BluetoothKeyboard
 					mmOutStream.Write (buffer, 0, buffer.Length);
 	
 					// Share the sent message back to the UI Activity
-					_handler.ObtainMessage (BluetoothKeyboardActivity.MESSAGE_WRITE, -1, -1, buffer)
+					_handler.ObtainMessage ((int)MessageType.MESSAGE_WRITE, -1, -1, buffer)
 						.SendToTarget ();
 				} catch (Java.IO.IOException e) {
 					Log.Error (TAG, "Exception during write", e);
