@@ -36,9 +36,6 @@ namespace BluetoothKeyboard
 		{
 			base.OnCreate(instance);
 
-			RequestWindowFeature(WindowFeatures.NoTitle);
-			Window.AddFlags(WindowManagerFlags.Fullscreen);
-			Window.ClearFlags(WindowManagerFlags.ForceNotFullscreen);
 			m_parentView = FindViewById (global::Android.Resource.Id.Content).RootView;
 			m_parentView.SetOnTouchListener(this);
 			m_touchSlop = ViewConfiguration.Get(ApplicationContext).ScaledTouchSlop;
@@ -83,13 +80,8 @@ namespace BluetoothKeyboard
 
 			if (actionResolved == (int)MotionEventActions.Move && motionEvent.PointerCount == 4 && Math.Abs(m_velocityTracker.GetXVelocity(actionPointerIndex)) > 3000)
 			{
-				//for (int ptrIndex = 0; ptrIndex < motionEvent.PointerCount; ptrIndex++) 
-				//{
-					// only one event for all move events.
 				HandleEvent(motionEvent.PointerCount, motionEvent, view, actionResolved);
 				m_velocityTracker.Clear ();
-				//}
-
 			} 
 			else 
 			{
